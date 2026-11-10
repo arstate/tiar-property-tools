@@ -104,6 +104,7 @@ export function CurrencyInput({
         <input
           type="text"
           inputMode="numeric"
+          pattern="[0-9]*"
           value={displayValue}
           onChange={handleChange}
           onFocus={() => setIsFocused(true)}

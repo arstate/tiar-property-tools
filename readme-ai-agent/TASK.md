@@ -27,3 +27,11 @@
 - [x] Confirm zero horizontal overflow & clean tabular-nums
 - [x] Static build export (`out/`) running live on port 3005
 - [x] Git snapshot commit `bcd8241` tagged `restore-sidebar-custom-dev-v1`
+
+## Milestone 5: Vercel Zero-Bandwidth Shield, GitHub Sync & Production Deployment
+- [x] Fix CanvasHeader z-index layer bug (`z-40`) to prevent slider thumbs bleed-through on scroll
+- [x] Configure `vercel.json` with extreme bandwidth caching headers & HTTP security policies
+- [x] Update `next.config.ts` with `compress`, `generateEtags`, `trailingSlash: false`, and `poweredByHeader: false`
+- [x] Production build validation (`npm run build`) with static export (`out/`)
+- [x] Push to GitHub repository `arstate/tiar-property-tools`
+- [x] Deploy to Vercel production with zero-usage configuration

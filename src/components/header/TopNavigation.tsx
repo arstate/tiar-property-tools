@@ -80,6 +80,9 @@ export function TopNavigation({
                 onChange={(e) => setTempName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleNameSave()}
                 autoFocus
+                autoCapitalize="words"
+                autoComplete="name"
+                enterKeyHint="done"
                 className="text-xs font-bold text-slate-900 bg-white border border-emerald-500 rounded-lg px-2 py-0.5 focus:outline-none w-36"
               />
               <button

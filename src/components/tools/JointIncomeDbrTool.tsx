@@ -209,6 +209,8 @@ export function JointIncomeDbrTool({
                   placeholder="Misal: Cicilan Motor Vario"
                   value={newDebtName}
                   onChange={(e) => setNewDebtName(e.target.value)}
+                  autoCapitalize="words"
+                  autoComplete="off"
                   className="w-full text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-emerald-600"
                 />
               </div>
@@ -218,6 +220,8 @@ export function JointIncomeDbrTool({
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="0"
                   value={newDebtAmount || ""}
                   onChange={(e) => setNewDebtAmount(parseFloat(e.target.value) || 0)}

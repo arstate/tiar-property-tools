@@ -6,6 +6,7 @@ import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { CustomSlider } from "@/components/ui/CustomSlider";
 import { IconifyIcon } from "@/components/ui/IconifyIcon";
 import { formatRupiah, formatNumber, formatPercent, formatMicroDaily } from "@/lib/formatters";
+import { calculateAnnuityMonthly, calculateFlatMonthly } from "@/lib/kprCalculations";
 import { cn } from "@/lib/utils";
 
 interface KprCalculatorToolProps {
@@ -27,6 +28,14 @@ export function KprCalculatorTool({
 }: KprCalculatorToolProps) {
   const [newPerkText, setNewPerkText] = useState("");
   const microDaily = formatMicroDaily(result.netMonthlyInstallmentPromo);
+
+  // Zero DP comparison calculation
+  const zeroDpBase =
+    input.calculationType === "flat"
+      ? calculateFlatMonthly(input.propertyPrice, input.fixedRatePercent, input.tenorYears)
+      : calculateAnnuityMonthly(input.propertyPrice, input.fixedRatePercent, input.tenorYears);
+  const zeroDpNet = Math.max(0, zeroDpBase - (input.hasDeveloperSubsidy ? input.developerSubsidyPerMonth : 0));
+  const dpMonthlySavings = Math.max(0, zeroDpNet - result.netMonthlyInstallmentPromo);
 
   const updateField = <K extends keyof KprInputState>(field: K, val: KprInputState[K]) => {
     onChange({ ...input, [field]: val });
@@ -56,17 +65,17 @@ export function KprCalculatorTool({
       <div className="lg:col-span-7 space-y-6">
         {/* Card 1: Harga Properti & Down Payment */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 bg-emerald-100 text-emerald-700 rounded-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 border-b border-slate-100 gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200/60">
                 <IconifyIcon icon="solar:home-add-angle-bold" className="w-5 h-5" />
-              </span>
+              </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-slate-900 leading-tight">
                   Harga Rumah & Skema Uang Muka (DP)
                 </h3>
-                <p className="text-xs text-slate-500">
-                  Ketik manual atau geser slider sesuai penawaran unit developer.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Ketik nominal atau geser slider sesuai harga unit.
                 </p>
               </div>
             </div>
@@ -76,9 +85,9 @@ export function KprCalculatorTool({
               type="button"
               onClick={() => updateField("isDpZero", !input.isDpZero)}
               className={cn(
-                "text-xs font-black px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 active:scale-95",
+                "text-xs font-bold px-4 py-2 rounded-full transition-all flex items-center gap-2 shrink-0 active:scale-95 shadow-2xs",
                 input.isDpZero
-                  ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400/30"
+                  ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-400/20"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               )}
             >
@@ -93,13 +102,12 @@ export function KprCalculatorTool({
           {/* 1. Harga Properti */}
           <div className="space-y-2">
             <CurrencyInput
-              label="Harga Properti (Ketik Bebas)"
+              label="Harga Properti"
               value={input.propertyPrice}
               onChange={(val) => updateField("propertyPrice", val)}
               min={50000000}
               max={3000000000}
               quickAddAmounts={[10000000, 25000000, 50000000, 100000000]}
-              helperText="Satuan Rupiah"
             />
             <CustomSlider
               min={200000000}
@@ -116,93 +124,198 @@ export function KprCalculatorTool({
             />
           </div>
 
-          {/* 2. Uang Muka DP */}
-          {!input.isDpZero ? (
-            <div className="pt-2 border-t border-slate-100 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <CurrencyInput
-                  label="Nominal DP (Rp)"
-                  value={input.downPaymentAmount || (input.propertyPrice * input.downPaymentPercent) / 100}
-                  onChange={(val) => {
-                    const percent = input.propertyPrice > 0 ? (val / input.propertyPrice) * 100 : 0;
+          {/* 2. Skema Uang Muka (DP) - Dual Mode Switcher */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                Pilihan Skema Uang Muka (DP)
+              </label>
+              <div className="flex items-center p-1 bg-slate-100 rounded-2xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...input, isDpZero: true })}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
+                    input.isDpZero
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <IconifyIcon icon="solar:gift-bold" className="w-3.5 h-3.5" />
+                  <span>DP 0% Promo</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...input, isDpZero: false })}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
+                    !input.isDpZero
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  <IconifyIcon icon="solar:wallet-money-bold" className="w-3.5 h-3.5" />
+                  <span>DP Custom / DP Besar</span>
+                </button>
+              </div>
+            </div>
+
+            {/* If DP 0% Promo Mode */}
+            {input.isDpZero ? (
+              <div className="bg-emerald-50/80 border border-emerald-200/90 rounded-2xl p-4 flex items-center justify-between gap-3 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <span className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <IconifyIcon icon="solar:shield-check-bold" className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-950">
+                      Skema Promo DP 0% (Bebas Biaya di Awal)
+                    </h4>
+                    <p className="text-[11px] text-emerald-800 leading-snug">
+                      Konsumen cukup membayar UTJ tanda jadi unit langsung diproses KPR. Tanpa beban DP puluhan juta di awal!
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[11px] font-black text-emerald-700 bg-white px-3 py-1 rounded-xl shadow-xs shrink-0 border border-emerald-200">
+                  HEMAT 100%
+                </span>
+              </div>
+            ) : (
+              /* If DP Custom Mode (Full Manual Input + Quick Chips + Slider) */
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-4 animate-fadeIn">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <div className="sm:col-span-7">
+                    <CurrencyInput
+                      label="Nominal DP yang Disiapkan"
+                      value={input.downPaymentAmount || (input.propertyPrice * input.downPaymentPercent) / 100}
+                      onChange={(val) => {
+                        const percent = input.propertyPrice > 0 ? (val / input.propertyPrice) * 100 : 0;
+                        onChange({
+                          ...input,
+                          downPaymentAmount: val,
+                          downPaymentPercent: parseFloat(percent.toFixed(1)),
+                        });
+                      }}
+                      max={input.propertyPrice}
+                      quickAddAmounts={[10000000, 25000000, 50000000, 100000000]}
+                    />
+                  </div>
+
+                  <div className="sm:col-span-5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                        Persentase DP
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          max="80"
+                          step="0.5"
+                          value={input.downPaymentPercent}
+                          onChange={(e) => {
+                            const pct = parseFloat(e.target.value) || 0;
+                            const amt = (input.propertyPrice * pct) / 100;
+                            onChange({
+                              ...input,
+                              downPaymentPercent: pct,
+                              downPaymentAmount: amt,
+                            });
+                          }}
+                          className="w-14 text-center text-xs font-black text-emerald-700 bg-white border border-slate-200 rounded-lg py-1 focus:outline-none focus:border-emerald-500"
+                        />
+                        <span className="text-xs font-bold text-slate-500">%</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 pt-1">
+                      {[10, 20, 30, 40].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => {
+                            const amt = (input.propertyPrice * pct) / 100;
+                            onChange({
+                              ...input,
+                              downPaymentPercent: pct,
+                              downPaymentAmount: amt,
+                            });
+                          }}
+                          className={cn(
+                            "flex-1 py-1.5 text-[11px] font-bold rounded-lg transition-all text-center",
+                            Math.round(input.downPaymentPercent) === pct
+                              ? "bg-emerald-600 text-white shadow-2xs"
+                              : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-100"
+                          )}
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <CustomSlider
+                  min={0}
+                  max={60}
+                  step={1}
+                  value={input.downPaymentPercent}
+                  onChange={(pct) => {
+                    const amt = (input.propertyPrice * pct) / 100;
                     onChange({
                       ...input,
-                      downPaymentAmount: val,
-                      downPaymentPercent: parseFloat(percent.toFixed(2)),
+                      downPaymentPercent: pct,
+                      downPaymentAmount: amt,
                     });
                   }}
-                  max={input.propertyPrice}
+                  ticks={[
+                    { value: 0, label: "0%" },
+                    { value: 10, label: "10%" },
+                    { value: 20, label: "20%" },
+                    { value: 30, label: "30%" },
+                    { value: 50, label: "50%" },
+                  ]}
                 />
-                <div>
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 block mb-1.5">
-                    Persentase DP: {input.downPaymentPercent}%
-                  </label>
-                  <CustomSlider
-                    min={0}
-                    max={50}
-                    step={1}
-                    value={input.downPaymentPercent}
-                    onChange={(pct) => {
-                      const amt = (input.propertyPrice * pct) / 100;
-                      onChange({
-                        ...input,
-                        downPaymentPercent: pct,
-                        downPaymentAmount: amt,
-                      });
-                    }}
-                    ticks={[
-                      { value: 5, label: "5%" },
-                      { value: 10, label: "10%" },
-                      { value: 20, label: "20%" },
-                      { value: 30, label: "30%" },
-                    ]}
-                  />
-                </div>
+
+                {/* Live Benefit Alert when DP > 0 */}
+                {input.downPaymentAmount > 0 && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📉</span>
+                      <span>
+                        Plafon KPR turun jadi <strong>{formatRupiah(result.loanAmount)}</strong>. Cicilan bulanan otomatis jauh lebih ringan!
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ) : (
-            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 bg-emerald-600 text-white rounded-xl">
-                  <IconifyIcon icon="solar:gift-bold" className="w-4 h-4" />
-                </span>
-                <div>
-                  <h4 className="text-xs font-bold text-emerald-950">
-                    Skema Promo Developer: DP 0% All-In
-                  </h4>
-                  <p className="text-[11px] text-emerald-800">
-                    Konsumen bebas biaya uang muka di awal. Cukup bayar UTJ tanda jadi unit langsung diproses KPR.
-                  </p>
-                </div>
-              </div>
-              <span className="text-xs font-extrabold text-emerald-700 bg-white px-2.5 py-1 rounded-xl shadow-xs">
-                HEMAT 100%
+            )}
+
+            {/* Plafon Pinjaman Info Bar */}
+            <div className="flex items-center justify-between pt-1 text-xs font-semibold text-slate-500">
+              <span>Plafon Pinjaman KPR yang Diajukan:</span>
+              <span className="text-sm font-black text-slate-900 tabular-nums">
+                {formatRupiah(result.loanAmount)}
               </span>
             </div>
-          )}
-
-          {/* Plafon Pinjaman Info Bar */}
-          <div className="flex items-center justify-between pt-2 text-xs font-semibold text-slate-500">
-            <span>Plafon Pinjaman KPR yang Diajukan:</span>
-            <span className="text-sm font-black text-slate-900 tabular-nums">
-              {formatRupiah(result.loanAmount)}
-            </span>
           </div>
         </div>
 
         {/* Card 2: Tenor & Suku Bunga Bank */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <span className="p-2 bg-blue-100 text-blue-700 rounded-2xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 border-b border-slate-100 gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0 border border-blue-200/60">
                 <IconifyIcon icon="solar:calendar-date-bold" className="w-5 h-5" />
-              </span>
+              </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-slate-900 leading-tight">
                   Tenor & Suku Bunga Bank
                 </h3>
-                <p className="text-xs text-slate-500">
-                  Pilih bank riil rekanan atau ubah suku bunga secara bebas manual.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pilih bank rekanan atau sesuaikan suku bunga KPR.
                 </p>
               </div>
             </div>
@@ -282,6 +395,7 @@ export function KprCalculatorTool({
               <div className="flex items-center gap-2">
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.05"
                   min="0"
                   max="20"
@@ -307,6 +421,7 @@ export function KprCalculatorTool({
               <div className="flex items-center gap-2">
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.1"
                   min="0"
                   max="25"
@@ -323,61 +438,24 @@ export function KprCalculatorTool({
           </div>
         </div>
 
-        {/* Card 3: FULL CUSTOM SUBSIDI & PROMO DEVELOPER (Multi-Developer Ready) */}
+        {/* Card 3: Keuntungan Tambahan Developer */}
         <div className="bg-gradient-to-br from-amber-50/70 via-orange-50/40 to-white rounded-3xl p-6 border-2 border-amber-200/90 shadow-sm space-y-5">
-          {/* Header & Developer Info */}
-          <div className="space-y-3 pb-3 border-b border-amber-200/70">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="p-2 bg-amber-500 text-white rounded-2xl shadow-sm">
-                  <IconifyIcon icon="solar:star-fall-bold" className="w-5 h-5" />
-                </span>
-                <div>
-                  <h3 className="text-base font-black text-amber-950">
-                    Keuntungan & Subsidi Promo Developer
-                  </h3>
-                  <p className="text-xs text-amber-800 font-medium">
-                    100% Full Custom untuk berbagai developer mitra yang Anda pasarkan.
-                  </p>
-                </div>
-              </div>
-
-              <span className="text-[11px] font-extrabold text-amber-800 bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
-                Multi-Developer
-              </span>
+          {/* Header */}
+          <div className="flex items-center gap-3 pb-3.5 border-b border-amber-200/70">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-amber-500/25">
+              <IconifyIcon icon="solar:star-fall-bold" className="w-5 h-5" />
             </div>
-
-            {/* Custom Developer Name & Project Name Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
-                  Nama Developer Mitra (Ketik Bebas)
-                </label>
-                <input
-                  type="text"
-                  value={input.developerName}
-                  onChange={(e) => updateField("developerName", e.target.value)}
-                  placeholder="Misal: PT. Trimitra / Citra Harmoni / Safira"
-                  className="w-full text-xs font-bold text-slate-900 bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 shadow-2xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
-                  Nama Proyek / Cluster Unit
-                </label>
-                <input
-                  type="text"
-                  value={input.projectName}
-                  onChange={(e) => updateField("projectName", e.target.value)}
-                  placeholder="Misal: Permata Kwangsan Tahap VI / The Oso Waru"
-                  className="w-full text-xs font-bold text-slate-900 bg-white border border-amber-200 rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 shadow-2xs"
-                />
-              </div>
+            <div>
+              <h3 className="text-base font-bold text-amber-950 leading-tight">
+                Keuntungan Tambahan Developer
+              </h3>
+              <p className="text-xs text-amber-800/90 mt-0.5">
+                Subsidi langsung dari developer yang mengurangi beban pengeluaran calon pembeli.
+              </p>
             </div>
           </div>
 
-          {/* 1. Custom Subsidi Cicilan Angsuran */}
+          {/* 1. Subsidi Cicilan Angsuran */}
           <div className="p-4 rounded-2xl bg-white border border-amber-200/90 shadow-2xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -399,14 +477,14 @@ export function KprCalculatorTool({
                 type="button"
                 onClick={() => updateField("hasDeveloperSubsidy", !input.hasDeveloperSubsidy)}
                 className={cn(
-                  "w-12 h-6 rounded-full transition-colors relative shrink-0",
+                  "w-11 h-6 rounded-full transition-colors relative shrink-0 p-0.5 focus:outline-none",
                   input.hasDeveloperSubsidy ? "bg-amber-500" : "bg-slate-300"
                 )}
               >
                 <div
                   className={cn(
-                    "w-5 h-5 rounded-full bg-white shadow-md transition-transform absolute top-0.5",
-                    input.hasDeveloperSubsidy ? "left-6.5" : "left-0.5"
+                    "w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out",
+                    input.hasDeveloperSubsidy ? "translate-x-5" : "translate-x-0"
                   )}
                 />
               </button>
@@ -437,23 +515,25 @@ export function KprCalculatorTool({
                         type="button"
                         onClick={() => updateField("developerSubsidyDurationMonths", m)}
                         className={cn(
-                          "flex-1 py-2 text-xs font-bold rounded-xl transition-all",
+                          "w-11 py-2 text-xs font-bold rounded-xl transition-all text-center",
                           input.developerSubsidyDurationMonths === m
                             ? "bg-amber-500 text-white shadow-xs"
                             : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                         )}
                       >
-                        {m} Bln
+                        {m}
                       </button>
                     ))}
                     <input
                       type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       min="1"
                       max="60"
                       value={input.developerSubsidyDurationMonths}
                       onChange={(e) => updateField("developerSubsidyDurationMonths", parseInt(e.target.value, 10) || 1)}
                       className="w-16 text-center text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl py-2 focus:outline-none focus:border-amber-500"
-                      title="Ketik durasi bulan custom"
+                      title="Ketik durasi bulan"
                     />
                   </div>
                   <span className="text-[10px] text-amber-700 font-bold block text-right">
@@ -464,7 +544,7 @@ export function KprCalculatorTool({
             )}
           </div>
 
-          {/* 2. Custom Free Legal All-In (BPHTB, AJB, BBN, Notaris) */}
+          {/* 2. Free Biaya Legal All-In (BPHTB, AJB, BBN, Notaris) */}
           <div className="p-4 rounded-2xl bg-white border border-amber-200/90 shadow-2xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -485,14 +565,14 @@ export function KprCalculatorTool({
                 type="button"
                 onClick={() => updateField("hasFreeLegalAllIn", !input.hasFreeLegalAllIn)}
                 className={cn(
-                  "w-12 h-6 rounded-full transition-colors relative shrink-0",
+                  "w-11 h-6 rounded-full transition-colors relative shrink-0 p-0.5 focus:outline-none",
                   input.hasFreeLegalAllIn ? "bg-amber-500" : "bg-slate-300"
                 )}
               >
                 <div
                   className={cn(
-                    "w-5 h-5 rounded-full bg-white shadow-md transition-transform absolute top-0.5",
-                    input.hasFreeLegalAllIn ? "left-6.5" : "left-0.5"
+                    "w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out",
+                    input.hasFreeLegalAllIn ? "translate-x-5" : "translate-x-0"
                   )}
                 />
               </button>
@@ -501,19 +581,18 @@ export function KprCalculatorTool({
             {input.hasFreeLegalAllIn && (
               <div className="pt-2 border-t border-slate-100 animate-fadeIn">
                 <CurrencyInput
-                  label="Estimasi Nilai Penghematan Legal (Ketik Bebas)"
+                  label="Estimasi Nilai Penghematan Legal"
                   value={input.freeLegalAmount}
                   onChange={(val) => updateField("freeLegalAmount", val)}
                   min={0}
                   max={100000000}
                   quickAddAmounts={[15000000, 25000000, 35000000]}
-                  helperText="Nilai Penghematan Nyata"
                 />
               </div>
             )}
           </div>
 
-          {/* 3. Custom Subsidi Biaya KPR (Bank Fees) */}
+          {/* 3. Subsidi Biaya KPR (Bank Fees) */}
           <div className="p-4 rounded-2xl bg-white border border-amber-200/90 shadow-2xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -534,14 +613,14 @@ export function KprCalculatorTool({
                 type="button"
                 onClick={() => updateField("hasKprFeeSubsidy", !input.hasKprFeeSubsidy)}
                 className={cn(
-                  "w-12 h-6 rounded-full transition-colors relative shrink-0",
+                  "w-11 h-6 rounded-full transition-colors relative shrink-0 p-0.5 focus:outline-none",
                   input.hasKprFeeSubsidy ? "bg-amber-500" : "bg-slate-300"
                 )}
               >
                 <div
                   className={cn(
-                    "w-5 h-5 rounded-full bg-white shadow-md transition-transform absolute top-0.5",
-                    input.hasKprFeeSubsidy ? "left-6.5" : "left-0.5"
+                    "w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ease-out",
+                    input.hasKprFeeSubsidy ? "translate-x-5" : "translate-x-0"
                   )}
                 />
               </button>
@@ -605,6 +684,8 @@ export function KprCalculatorTool({
                 value={newPerkText}
                 onChange={(e) => setNewPerkText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddCustomPerk()}
+                autoCapitalize="sentences"
+                enterKeyHint="done"
                 placeholder="Ketik bonus custom (misal: Free AC 2 Unit) lalu Enter"
                 className="flex-1 text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500"
               />
@@ -622,11 +703,12 @@ export function KprCalculatorTool({
 
       {/* RIGHT COLUMN: Real-Time Pitching Outcome Cards (5 Cols) */}
       <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-20">
-        {/* Main Hero Closing Card */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-slate-700 space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-700/80">
+        {/* Main Hero Closing Card (Compact, Minimal & High-Impact) */}
+        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-5 shadow-xl border border-slate-700/80 space-y-3.5">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-700/80">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
                 Simulasi Cicilan Resmi
               </span>
@@ -638,79 +720,83 @@ export function KprCalculatorTool({
             )}
           </div>
 
-          {/* Project & Developer Label */}
-          <div className="text-xs text-slate-400">
-            <span>Properti: </span>
+          {/* Unit Name Info */}
+          <div className="text-xs text-slate-300 flex items-center justify-between">
+            <span className="text-slate-400">Unit:</span>
             <strong className="text-white font-bold">{input.projectName || "Unit Pilihan"}</strong>
-            {input.developerName && (
-              <span className="block text-[11px] text-slate-400 mt-0.5">
-                Developer: {input.developerName}
-              </span>
-            )}
           </div>
 
           {/* Net Promo Installment */}
-          <div className="space-y-1">
-            <span className="text-xs font-semibold text-slate-400 block">
-              {input.hasDeveloperSubsidy ? "Angsuran Bersih Promo (Setelah Subsidi Developer)" : "Angsuran Promo per Bulan"}
+          <div>
+            <span className="text-[11px] font-semibold text-slate-400 block">
+              {input.hasDeveloperSubsidy ? "Angsuran Bersih Promo" : "Angsuran Promo"}
             </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight tabular-nums">
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-3xl font-black text-emerald-400 tracking-tight tabular-nums">
                 {formatRupiah(result.netMonthlyInstallmentPromo)}
               </span>
-              <span className="text-sm font-semibold text-slate-300">/ bulan</span>
+              <span className="text-xs font-semibold text-slate-400">/ bulan</span>
             </div>
             {input.hasDeveloperSubsidy && (
-              <span className="text-xs text-slate-400 line-through">
-                Harga Normal: {formatRupiah(result.baseMonthlyInstallmentPromo)}/bln
+              <span className="text-[11px] text-slate-400 line-through block mt-0.5">
+                Normal: {formatRupiah(result.baseMonthlyInstallmentPromo)}/bln
               </span>
             )}
           </div>
 
-          {/* Micro-Installment Daily Reframing Badge (Anti-Price Shock) */}
-          <div className="p-4 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-sm space-y-2">
-            <div className="flex items-center gap-2 text-amber-300 text-xs font-bold uppercase tracking-wider">
-              <IconifyIcon icon="fluent-emoji:hot-beverage" className="w-4 h-4" />
-              <span>Pecahan Harian Ringan</span>
+          {/* DP Impact Comparison Alert if DP Custom is active and > 0 */}
+          {!input.isDpZero && input.downPaymentAmount > 0 && dpMonthlySavings > 0 && (
+            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-xs text-emerald-300 flex items-center justify-between animate-fadeIn">
+              <span className="font-medium">
+                Hemat berkat DP {formatRupiah(input.downPaymentAmount)}:
+              </span>
+              <strong className="text-emerald-300 font-black tabular-nums">
+                - {formatRupiah(dpMonthlySavings)} /bln
+              </strong>
             </div>
-            <div className="text-xl font-black text-white tabular-nums">
-              Cuma {microDaily.formattedDaily} <span className="text-xs font-normal text-slate-300">/ hari</span>
+          )}
+
+          {/* Sleek 1-Line Micro-Installment Daily Reframing */}
+          <div className="p-2.5 rounded-xl bg-white/10 border border-white/10 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <span className="text-sm">☕</span>
+              <span className="text-slate-300 font-medium truncate">
+                Pecahan Harian: <strong className="text-amber-300 font-bold">{microDaily.formattedDaily}/hari</strong>
+              </span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              💡 {microDaily.phrase}. Uang jajan harian langsung berubah jadi aset rumah SHM milik sendiri!
-            </p>
+            <span className="text-[10px] text-slate-400 shrink-0">(Setara ngopi)</span>
           </div>
 
           {/* Floating Period Estimate & Total Savings */}
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700/80">
+          <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-slate-700/80">
             <div>
-              <span className="text-[11px] text-slate-400 block">Cicilan Pasca Promo</span>
-              <span className="text-base font-bold text-white tabular-nums">
+              <span className="text-[10px] text-slate-400 block">Cicilan Pasca Promo</span>
+              <span className="text-sm font-bold text-white tabular-nums">
                 {formatRupiah(result.monthlyInstallmentFloating)}
               </span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
+              <span className="text-[9px] text-slate-400 block mt-0.5">
                 (Floating ~{input.floatingRatePercent}%)
               </span>
             </div>
             <div>
-              <span className="text-[11px] text-slate-400 block">Total Subsidi Developer</span>
-              <span className="text-base font-bold text-amber-400 tabular-nums">
+              <span className="text-[10px] text-slate-400 block">Total Subsidi Developer</span>
+              <span className="text-sm font-bold text-amber-400 tabular-nums">
                 {formatRupiah(result.totalDeveloperSavings)}
               </span>
-              <span className="text-[10px] text-emerald-400 block mt-0.5">
+              <span className="text-[9px] text-emerald-400 block mt-0.5">
                 Hemat Langsung
               </span>
             </div>
           </div>
 
           {/* Action CTAs */}
-          <div className="space-y-2.5 pt-2">
+          <div className="space-y-2 pt-1">
             <button
               type="button"
               onClick={() => onNavigateToTool("slip")}
-              className="w-full py-3.5 px-4 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black rounded-2xl shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 bg-emerald-500 hover:bg-emerald-400 active:scale-[0.98] text-slate-950 font-black rounded-xl shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 text-xs"
             >
-              <IconifyIcon icon="solar:document-text-bold" className="w-5 h-5" />
+              <IconifyIcon icon="solar:document-text-bold" className="w-4 h-4" />
               <span>Buat Slip Penawaran & Kirim WhatsApp</span>
             </button>
 
@@ -718,18 +804,18 @@ export function KprCalculatorTool({
               <button
                 type="button"
                 onClick={() => onNavigateToTool("whiteboard")}
-                className="py-2.5 px-3 bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
+                className="py-2 px-3 bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
               >
-                <IconifyIcon icon="solar:pen-new-square-bold" className="w-4 h-4 text-emerald-300" />
-                <span>Papan Coret-Coret</span>
+                <IconifyIcon icon="solar:pen-new-square-bold" className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Papan Coret</span>
               </button>
               <button
                 type="button"
                 onClick={() => onNavigateToTool("dbr")}
-                className="py-2.5 px-3 bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
+                className="py-2 px-3 bg-white/10 hover:bg-white/15 active:scale-95 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
               >
-                <IconifyIcon icon="solar:shield-check-bold" className="w-4 h-4 text-amber-300" />
-                <span>Cek Gaji & DBR</span>
+                <IconifyIcon icon="solar:shield-check-bold" className="w-3.5 h-3.5 text-amber-300" />
+                <span>Cek DBR</span>
               </button>
             </div>
           </div>

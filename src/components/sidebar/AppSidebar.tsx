@@ -89,14 +89,26 @@ export function AppSidebar({
       )}
     >
       {/* 1. TOP SECTION: Brand Header & Client Prospect */}
-      <div className="p-4 sm:p-5 border-b border-slate-100 space-y-4">
+      <div className={cn("border-b border-slate-100", isCollapsed ? "p-3 flex items-center justify-center" : "p-4 sm:p-5 space-y-4")}>
         {/* Brand & Collapse Toggle */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-700 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20 shrink-0">
-              <IconifyIcon icon="solar:home-smile-bold" className="w-6 h-6" />
-            </div>
-            {!isCollapsed && (
+        {isCollapsed ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="w-11 h-11 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-2xl transition-all active:scale-95"
+            title="Buka Sidebar"
+          >
+            <IconifyIcon
+              icon="solar:sidebar-minimalistic-outline"
+              className="w-5 h-5"
+            />
+          </button>
+        ) : (
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3 overflow-hidden">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-700 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-emerald-500/20 shrink-0">
+                <IconifyIcon icon="solar:home-smile-bold" className="w-6 h-6" />
+              </div>
               <div className="overflow-hidden">
                 <div className="flex items-center gap-1.5">
                   <h1 className="text-base font-black tracking-tight text-slate-900 truncate">
@@ -107,21 +119,21 @@ export function AppSidebar({
                   Surabaya & Sidoarjo
                 </p>
               </div>
-            )}
-          </div>
+            </div>
 
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
-            title={isCollapsed ? "Buka Sidebar" : "Perkecil Sidebar"}
-          >
-            <IconifyIcon
-              icon={isCollapsed ? "solar:sidebar-minimalistic-outline" : "solar:sidebar-minimalistic-bold"}
-              className="w-5 h-5"
-            />
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
+              title="Perkecil Sidebar"
+            >
+              <IconifyIcon
+                icon="solar:sidebar-minimalistic-bold"
+                className="w-5 h-5"
+              />
+            </button>
+          </div>
+        )}
 
         {/* Client Name Editor Box */}
         {!isCollapsed && (
@@ -142,6 +154,9 @@ export function AppSidebar({
                   onChange={(e) => setTempName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleNameSave()}
                   autoFocus
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  enterKeyHint="done"
                   className="w-full text-xs font-bold text-slate-900 bg-white border border-emerald-500 rounded-lg px-2 py-1 focus:outline-none"
                 />
                 <button
@@ -190,47 +205,51 @@ export function AppSidebar({
                 type="button"
                 onClick={() => onSelectTool(tool.id)}
                 className={cn(
-                  "w-full text-left rounded-2xl transition-all duration-150 flex items-center gap-3 active:scale-[0.98]",
-                  isCollapsed ? "p-3 justify-center" : "px-3.5 py-3",
+                  "w-full text-left rounded-2xl transition-all duration-150 flex items-center active:scale-[0.98]",
+                  isCollapsed ? "w-11 h-11 mx-auto justify-center p-0" : "px-3.5 py-3 gap-3",
                   isActive
                     ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                 )}
                 title={tool.label}
               >
-                <div
-                  className={cn(
-                    "p-2 rounded-xl shrink-0 transition-colors",
-                    isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700"
-                  )}
-                >
-                  <IconifyIcon icon={tool.icon} className="w-5 h-5" />
-                </div>
-
-                {!isCollapsed && (
-                  <div className="flex-1 overflow-hidden">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs font-bold truncate">{tool.label}</span>
-                      {tool.badge && (
-                        <span
-                          className={cn(
-                            "text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full tracking-wider shrink-0",
-                            isActive ? "bg-amber-400 text-slate-950" : "bg-emerald-100 text-emerald-800"
-                          )}
-                        >
-                          {tool.badge}
-                        </span>
-                      )}
-                    </div>
-                    <p
+                {isCollapsed ? (
+                  <IconifyIcon icon={tool.icon} className="w-5 h-5 shrink-0" />
+                ) : (
+                  <>
+                    <div
                       className={cn(
-                        "text-[10px] truncate mt-0.5",
-                        isActive ? "text-emerald-100" : "text-slate-400"
+                        "p-2 rounded-xl shrink-0 transition-colors",
+                        isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700"
                       )}
                     >
-                      {tool.desc}
-                    </p>
-                  </div>
+                      <IconifyIcon icon={tool.icon} className="w-5 h-5" />
+                    </div>
+
+                    <div className="flex-1 overflow-hidden">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold truncate">{tool.label}</span>
+                        {tool.badge && (
+                          <span
+                            className={cn(
+                              "text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full tracking-wider shrink-0",
+                              isActive ? "bg-amber-400 text-slate-950" : "bg-emerald-100 text-emerald-800"
+                            )}
+                          >
+                            {tool.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p
+                        className={cn(
+                          "text-[10px] truncate mt-0.5",
+                          isActive ? "text-emerald-100" : "text-slate-400"
+                        )}
+                      >
+                        {tool.desc}
+                      </p>
+                    </div>
+                  </>
                 )}
               </button>
             );
@@ -291,35 +310,38 @@ export function AppSidebar({
       </div>
 
       {/* 3. BOTTOM SECTION: Bank Selector & Quick Helpline */}
-      <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50/70 space-y-2">
+      <div className={cn("border-t border-slate-100 bg-slate-50/70", isCollapsed ? "p-3 flex flex-col items-center" : "p-3 sm:p-4 space-y-2")}>
         {/* Bank Selection Trigger */}
         <button
           type="button"
           onClick={onOpenBankModal}
           className={cn(
-            "w-full rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 p-2.5 transition-all flex items-center justify-between shadow-xs active:scale-95",
-            isCollapsed && "p-2 justify-center"
+            "rounded-2xl transition-all flex items-center active:scale-95",
+            isCollapsed
+              ? "w-11 h-11 justify-center p-0 text-blue-700 hover:text-blue-800 hover:bg-blue-50/80"
+              : "w-full p-2.5 justify-between border border-slate-200 bg-white hover:bg-slate-50 shadow-xs"
           )}
           title="Pilih Bank KPR Riil"
         >
-          <div className="flex items-center gap-2 overflow-hidden">
-            <span className="p-1.5 rounded-xl bg-blue-50 text-blue-700 shrink-0">
-              <IconifyIcon icon="solar:bank-bold" className="w-4 h-4" />
-            </span>
-            {!isCollapsed && (
-              <div className="text-left overflow-hidden">
-                <span className="text-[10px] font-bold text-slate-400 block uppercase">
-                  Rate Bank KPR
+          {isCollapsed ? (
+            <IconifyIcon icon="solar:bank-bold" className="w-5 h-5 text-blue-600 shrink-0" />
+          ) : (
+            <>
+              <div className="flex items-center gap-2 overflow-hidden">
+                <span className="p-1.5 rounded-xl bg-blue-50 text-blue-700 shrink-0">
+                  <IconifyIcon icon="solar:bank-bold" className="w-4 h-4" />
                 </span>
-                <span className="text-xs font-black text-slate-900 truncate block">
-                  {selectedBank?.name || "Pilih Bank Riil"}
-                </span>
+                <div className="text-left overflow-hidden">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">
+                    Rate Bank KPR
+                  </span>
+                  <span className="text-xs font-black text-slate-900 truncate block">
+                    {selectedBank?.name || "Pilih Bank Riil"}
+                  </span>
+                </div>
               </div>
-            )}
-          </div>
-
-          {!isCollapsed && (
-            <IconifyIcon icon="solar:alt-arrow-right-linear" className="w-4 h-4 text-slate-400 shrink-0" />
+              <IconifyIcon icon="solar:alt-arrow-right-linear" className="w-4 h-4 text-slate-400 shrink-0" />
+            </>
           )}
         </button>
 

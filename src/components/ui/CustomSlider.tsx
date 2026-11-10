@@ -31,37 +31,41 @@ export function CustomSlider({
   };
 
   return (
-    <div className={cn("relative py-2 select-none", className)}>
-      <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
-        {/* Active track fill */}
+    <div className={cn("relative select-none", className)}>
+      {/* Slider Interactive Track Area */}
+      <div className="relative w-full h-7 flex items-center">
+        {/* Track Line Background */}
+        <div className="relative w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+          {/* Active track fill */}
+          <div
+            className="absolute top-0 left-0 h-full bg-emerald-600 rounded-full transition-all duration-75"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+
+        {/* Custom Thumb dot - vertically centered at exact line midpoint */}
         <div
-          className="absolute top-0 left-0 h-full bg-emerald-600 rounded-full transition-all duration-75"
-          style={{ width: `${percentage}%` }}
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 bg-white border-2 border-emerald-600 rounded-full shadow-sm pointer-events-none transition-all duration-75 flex items-center justify-center ring-4 ring-emerald-500/15 z-20"
+          style={{ left: `${percentage}%` }}
+        >
+          <div className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+        </div>
+
+        {/* Standard Range Input for native drag & accessibility */}
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={handleChange}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30 appearance-none bg-transparent"
         />
       </div>
 
-      {/* Hidden standard range input that overlays for native accessibility & dragging */}
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={handleChange}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-      />
-
-      {/* Custom Thumb dot */}
-      <div
-        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 bg-white border-2 border-emerald-600 rounded-full shadow-md pointer-events-none transition-all duration-75 flex items-center justify-center"
-        style={{ left: `${percentage}%` }}
-      >
-        <div className="w-2 h-2 bg-emerald-600 rounded-full" />
-      </div>
-
-      {/* Optional Ticks below */}
+      {/* Optional Ticks below track container */}
       {ticks && ticks.length > 0 && (
-        <div className="flex justify-between items-center mt-2 px-0.5">
+        <div className="flex justify-between items-center mt-1 px-0.5">
           {ticks.map((t) => (
             <button
               key={t.value}

@@ -26,6 +26,33 @@
   }
 }
 
+/* Custom range slider thumb reset to eliminate browser GTK square artifact */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+input[type="range"]:focus {
+  outline: none;
+}
+
 /* Hide scrollbars for toolbars while preserving touch/scroll behavior */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

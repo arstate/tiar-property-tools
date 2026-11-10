@@ -291,6 +291,9 @@ Kira-kira mau saya temenin cek lokasinya hari Sabtu sore atau Minggu pagi kak ${
               <span className="mr-2 text-sm font-bold text-slate-400 select-none">+62</span>
               <input
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="tel"
                 placeholder="81234567890"
                 value={clientPhone}
                 onChange={(e) => setClientPhone(e.target.value)}

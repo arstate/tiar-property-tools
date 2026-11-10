@@ -34,13 +34,53 @@ export function WhiteboardTool({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [activeTool, setActiveTool] = useState<BrushTool>("pen");
-  const [activeColor, setActiveColor] = useState<string>("#0F172A");
-  const [brushSize, setBrushSize] = useState<number>(4);
-  const [bgTemplate, setBgTemplate] = useState<BackgroundTemplate>("blank");
+  const [activeColor, setActiveColor] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("tiar_whiteboard_color_v1") || "#0F172A";
+    }
+    return "#0F172A";
+  });
+  const [brushSize, setBrushSize] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const s = localStorage.getItem("tiar_whiteboard_size_v1");
+      if (s) return parseInt(s, 10) || 4;
+    }
+    return 4;
+  });
+  const [bgTemplate, setBgTemplate] = useState<BackgroundTemplate>(() => {
+    if (typeof window !== "undefined") {
+      const t = localStorage.getItem("tiar_whiteboard_template_v1");
+      if (t) return t as BackgroundTemplate;
+    }
+    return "blank";
+  });
 
-  const [isDrawing, setIsDrawing] = useState(false);
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const isDrawingRef = useRef<boolean>(false);
+  const isInitializedRef = useRef<boolean>(false);
+
+  // Helper to get compact WebP data URL (~50x smaller than raw PNG) to prevent localStorage quota exhaustion
+  const getStorageDataUrl = (canvas: HTMLCanvasElement): string => {
+    try {
+      const webp = canvas.toDataURL("image/webp", 0.85);
+      if (webp && webp.startsWith("data:image/webp")) {
+        return webp;
+      }
+    } catch {}
+    return canvas.toDataURL("image/png");
+  };
+
+  const saveToStorage = (canvas: HTMLCanvasElement) => {
+    try {
+      if (typeof window !== "undefined") {
+        const dataUrl = getStorageDataUrl(canvas);
+        localStorage.setItem("tiar_whiteboard_canvas_v1", dataUrl);
+      }
+    } catch (err) {
+      console.warn("Storage quota or save notice:", err);
+    }
+  };
 
   // Initialize and resize canvas
   const setupCanvas = useCallback(() => {
@@ -51,25 +91,54 @@ export function WhiteboardTool({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Capture in-memory drawing ONLY on resize (after initial mount has completed)
+    let inMemoryDrawing: string | null = null;
+    if (isInitializedRef.current && canvas.width > 0 && canvas.height > 0) {
+      try {
+        inMemoryDrawing = canvas.toDataURL();
+      } catch {}
+    }
+
     const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
+    const h = rect.height || 750;
 
     // Set physical pixel dimensions for high DPI
     canvas.width = rect.width * dpr;
-    canvas.height = 680 * dpr;
+    canvas.height = h * dpr;
 
     // Set logical CSS dimensions
     canvas.style.width = `${rect.width}px`;
-    canvas.style.height = "680px";
+    canvas.style.height = `${h}px`;
 
     ctx.scale(dpr, dpr);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // Save initial blank state
-    const initialState = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setHistory([initialState]);
-    setHistoryIndex(0);
+    // On initial mount, restore strictly from localStorage. On resize, restore from in-memory drawing.
+    const saved =
+      inMemoryDrawing ||
+      (!isInitializedRef.current && typeof window !== "undefined"
+        ? localStorage.getItem("tiar_whiteboard_canvas_v1")
+        : null);
+
+    isInitializedRef.current = true;
+
+    if (saved) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, rect.width, h);
+        const restoredState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        setHistory([restoredState]);
+        setHistoryIndex(0);
+      };
+      img.src = saved;
+    } else {
+      // Save initial blank state
+      const initialState = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      setHistory([initialState]);
+      setHistoryIndex(0);
+    }
   }, []);
 
   useEffect(() => {
@@ -110,12 +179,18 @@ export function WhiteboardTool({
       ctx.globalAlpha = 1.0;
     }
 
-    setIsDrawing(true);
-    canvas.setPointerCapture(e.pointerId);
+    // Immediately stroke a point so single tap or click creates a visible dot
+    ctx.lineTo(x, y);
+    ctx.stroke();
+
+    isDrawingRef.current = true;
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {}
   };
 
   const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
+    if (!isDrawingRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -131,7 +206,8 @@ export function WhiteboardTool({
   };
 
   const stopDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -141,7 +217,6 @@ export function WhiteboardTool({
     ctx.closePath();
     ctx.globalAlpha = 1.0;
     ctx.globalCompositeOperation = "source-over";
-    setIsDrawing(false);
 
     try {
       canvas.releasePointerCapture(e.pointerId);
@@ -155,6 +230,9 @@ export function WhiteboardTool({
     if (newHistory.length > 20) newHistory.shift();
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
+
+    // Persist to local browser storage with quota-safe compression
+    saveToStorage(canvas);
   };
 
   // Undo / Redo
@@ -168,6 +246,7 @@ export function WhiteboardTool({
     const prevIndex = historyIndex - 1;
     ctx.putImageData(history[prevIndex], 0, 0);
     setHistoryIndex(prevIndex);
+    saveToStorage(canvas);
   };
 
   const handleRedo = () => {
@@ -180,6 +259,7 @@ export function WhiteboardTool({
     const nextIndex = historyIndex + 1;
     ctx.putImageData(history[nextIndex], 0, 0);
     setHistoryIndex(nextIndex);
+    saveToStorage(canvas);
   };
 
   const handleClear = () => {
@@ -193,15 +273,17 @@ export function WhiteboardTool({
       const emptyState = ctx.getImageData(0, 0, canvas.width, canvas.height);
       setHistory([emptyState]);
       setHistoryIndex(0);
+      try {
+        localStorage.removeItem("tiar_whiteboard_canvas_v1");
+      } catch {}
     }
   };
 
-  // Download sketch as PNG
+  // Download sketch as PNG (includes background floorplan/siteplan template)
   const handleExportPng = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Create a temporary export canvas with white background
     const exportCanvas = document.createElement("canvas");
     exportCanvas.width = canvas.width;
     exportCanvas.height = canvas.height;
@@ -221,77 +303,138 @@ export function WhiteboardTool({
     exportCtx.font = "bold 18px sans-serif";
     exportCtx.fillText(`Harga: ${formatRupiah(propertyPrice)} | Angsuran Promo: ${formatRupiah(monthlyInstallment)}/bln`, 30, 70);
 
-    // 3. Draw user strokes
-    exportCtx.drawImage(canvas, 0, 0);
+    const triggerDownload = () => {
+      // 4. Draw user strokes on top of template
+      exportCtx.drawImage(canvas, 0, 0);
 
-    // 4. Trigger download
-    const link = document.createElement("a");
-    link.download = `Sketsa-TiarProperty-${clientName.replace(/\s+/g, "_")}.png`;
-    link.href = exportCanvas.toDataURL("image/png");
-    link.click();
+      const link = document.createElement("a");
+      link.download = `Sketsa-TiarProperty-${clientName.replace(/\s+/g, "_")}.png`;
+      link.href = exportCanvas.toDataURL("image/png");
+      link.click();
+    };
+
+    // 3. Render active background template
+    if (bgTemplate === "grid") {
+      exportCtx.fillStyle = "#94A3B8";
+      const step = 24 * (window.devicePixelRatio || 1);
+      for (let x = 0; x < exportCanvas.width; x += step) {
+        for (let y = 100; y < exportCanvas.height; y += step) {
+          exportCtx.beginPath();
+          exportCtx.arc(x, y, 1.5, 0, Math.PI * 2);
+          exportCtx.fill();
+        }
+      }
+      triggerDownload();
+    } else if (bgTemplate !== "blank" && containerRef.current) {
+      const svg = containerRef.current.querySelector("svg");
+      if (svg) {
+        try {
+          const svgData = new XMLSerializer().serializeToString(svg);
+          const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+          const url = URL.createObjectURL(svgBlob);
+          const svgImg = new Image();
+          svgImg.onload = () => {
+            const padding = 60;
+            const availableW = exportCanvas.width - padding * 2;
+            const availableH = exportCanvas.height - 120 - padding;
+            const vbW = svg.viewBox?.baseVal?.width || 600;
+            const vbH = svg.viewBox?.baseVal?.height || 800;
+            const scale = Math.min(availableW / vbW, availableH / vbH);
+            const drawW = vbW * scale;
+            const drawH = vbH * scale;
+            const drawX = (exportCanvas.width - drawW) / 2;
+            const drawY = 100 + (availableH - drawH) / 2;
+
+            exportCtx.save();
+            exportCtx.globalAlpha = 0.5;
+            exportCtx.drawImage(svgImg, drawX, drawY, drawW, drawH);
+            exportCtx.restore();
+            URL.revokeObjectURL(url);
+            triggerDownload();
+          };
+          svgImg.onerror = () => triggerDownload();
+          svgImg.src = url;
+          return;
+        } catch {
+          triggerDownload();
+        }
+      } else {
+        triggerDownload();
+      }
+    } else {
+      triggerDownload();
+    }
   };
 
   return (
-    <div className="space-y-4">
-      {/* Top Toolbar: Controls, Color, Brushes, and Actions */}
-      <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        {/* Left: Tool selector (Pen, Highlighter, Eraser) */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full flex-1 rounded-3xl overflow-hidden border-2 border-slate-200/90 shadow-sm bg-white select-none"
+    >
+      {/* FLOATING 1-ROW GLASSMORPHIC TOOLBAR AT BOTTOM */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-full px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 max-w-[95%] overflow-x-auto no-scrollbar">
+        {/* Tool selector: Pen, Highlighter, Eraser */}
+        <div className="flex items-center gap-1 p-0.5 bg-slate-100 rounded-full shrink-0">
           <button
             type="button"
             onClick={() => setActiveTool("pen")}
             className={cn(
-              "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
               activeTool === "pen"
-                ? "bg-white text-slate-900 shadow-sm"
+                ? "bg-white text-slate-900 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <IconifyIcon icon="solar:pen-bold" className="w-4 h-4 text-emerald-600" />
-            <span>Pena</span>
+            <IconifyIcon icon="solar:pen-bold" className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="hidden sm:inline">Pena</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTool("highlighter")}
             className={cn(
-              "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
               activeTool === "highlighter"
-                ? "bg-white text-slate-900 shadow-sm"
+                ? "bg-white text-slate-900 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <IconifyIcon icon="solar:brush-bold" className="w-4 h-4 text-amber-500" />
-            <span>Stabilo</span>
+            <IconifyIcon icon="solar:brush-bold" className="w-3.5 h-3.5 text-amber-500" />
+            <span className="hidden sm:inline">Stabilo</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTool("eraser")}
             className={cn(
-              "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
+              "px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95",
               activeTool === "eraser"
-                ? "bg-white text-slate-900 shadow-sm"
+                ? "bg-white text-slate-900 shadow-xs"
                 : "text-slate-600 hover:text-slate-900"
             )}
           >
-            <IconifyIcon icon="solar:eraser-bold" className="w-4 h-4 text-rose-500" />
-            <span>Hapus</span>
+            <IconifyIcon icon="solar:eraser-bold" className="w-3.5 h-3.5 text-rose-500" />
+            <span className="hidden sm:inline">Hapus</span>
           </button>
         </div>
 
-        {/* Center: Color Picker */}
+        {/* Color Palette Dots */}
         {activeTool !== "eraser" && (
-          <div className="flex items-center gap-1.5 px-2">
+          <div className="flex items-center gap-1.5 px-1 shrink-0">
             {COLOR_PALETTE.map((c) => (
               <button
                 key={c.hex}
                 type="button"
-                onClick={() => setActiveColor(c.hex)}
+                onClick={() => {
+                  setActiveColor(c.hex);
+                  try {
+                    localStorage.setItem("tiar_whiteboard_color_v1", c.hex);
+                  } catch {}
+                }}
                 className={cn(
-                  "w-7 h-7 rounded-full border-2 transition-transform active:scale-90",
+                  "w-6 h-6 rounded-full border-2 transition-transform active:scale-90",
                   activeColor === c.hex
-                    ? "border-slate-900 scale-110 shadow-sm ring-2 ring-slate-400/40"
+                    ? "border-slate-900 scale-110 shadow-sm ring-2 ring-slate-400/30"
                     : "border-white hover:scale-105"
                 )}
                 style={{ backgroundColor: c.hex }}
@@ -301,18 +444,24 @@ export function WhiteboardTool({
           </div>
         )}
 
-        {/* Brush Size selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-400">Tebal:</span>
+        <div className="h-5 w-[1px] bg-slate-200 shrink-0" />
+
+        {/* Brush Size */}
+        <div className="flex items-center gap-1 shrink-0">
           {[2, 4, 8, 14].map((sz) => (
             <button
               key={sz}
               type="button"
-              onClick={() => setBrushSize(sz)}
+              onClick={() => {
+                setBrushSize(sz);
+                try {
+                  localStorage.setItem("tiar_whiteboard_size_v1", sz.toString());
+                } catch {}
+              }}
               className={cn(
-                "w-7 h-7 rounded-xl text-xs font-bold flex items-center justify-center transition-all",
+                "w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center transition-all",
                 brushSize === sz
-                  ? "bg-slate-900 text-white"
+                  ? "bg-slate-900 text-white shadow-2xs"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               )}
             >
@@ -321,29 +470,38 @@ export function WhiteboardTool({
           ))}
         </div>
 
-        {/* Template Selector */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-bold text-slate-400 mr-1">Template:</span>
+        <div className="h-5 w-[1px] bg-slate-200 shrink-0" />
+
+        {/* Template Dropdown */}
+        <div className="shrink-0">
           <select
             value={bgTemplate}
-            onChange={(e) => setBgTemplate(e.target.value as BackgroundTemplate)}
-            className="text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-600"
+            onChange={(e) => {
+              const tmpl = e.target.value as BackgroundTemplate;
+              setBgTemplate(tmpl);
+              try {
+                localStorage.setItem("tiar_whiteboard_template_v1", tmpl);
+              } catch {}
+            }}
+            className="text-xs font-bold text-slate-800 bg-slate-50 border border-slate-200 rounded-full px-3 py-1 focus:outline-none focus:border-emerald-600"
           >
-            <option value="blank">Kertas Putih Polos</option>
-            <option value="grid">Grid Milimeter</option>
-            <option value="floorplan-1fl">Denah 1 Lantai (Kwangsan 36/72)</option>
-            <option value="floorplan-2fl">Denah 2 Lantai (The Oso 55/60)</option>
-            <option value="siteplan">Siteplan / Blok Kavling</option>
+            <option value="blank">Kertas Polos</option>
+            <option value="grid">Grid</option>
+            <option value="floorplan-1fl">Denah 1 Lt (36/72)</option>
+            <option value="floorplan-2fl">Denah 2 Lt (55/60)</option>
+            <option value="siteplan">Siteplan Kavling</option>
           </select>
         </div>
 
-        {/* Actions: Undo, Redo, Clear, Download */}
-        <div className="flex items-center gap-1.5 ml-auto">
+        <div className="h-5 w-[1px] bg-slate-200 shrink-0" />
+
+        {/* Actions: Undo, Redo, Clear, Download PNG (Icon Only) */}
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={handleUndo}
             disabled={historyIndex <= 0}
-            className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+            className="p-1.5 rounded-full text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors"
             title="Undo"
           >
             <IconifyIcon icon="solar:undo-left-round-bold" className="w-4 h-4" />
@@ -352,7 +510,7 @@ export function WhiteboardTool({
             type="button"
             onClick={handleRedo}
             disabled={historyIndex >= history.length - 1}
-            className="p-2 rounded-xl text-slate-600 hover:bg-slate-100 disabled:opacity-40 transition-colors"
+            className="p-1.5 rounded-full text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors"
             title="Redo"
           >
             <IconifyIcon icon="solar:undo-right-round-bold" className="w-4 h-4" />
@@ -360,7 +518,7 @@ export function WhiteboardTool({
           <button
             type="button"
             onClick={handleClear}
-            className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 transition-colors"
+            className="p-1.5 rounded-full text-rose-600 hover:bg-rose-50 transition-colors"
             title="Hapus Semua"
           >
             <IconifyIcon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
@@ -369,20 +527,13 @@ export function WhiteboardTool({
           <button
             type="button"
             onClick={handleExportPng}
-            className="text-xs font-bold px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+            className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white flex items-center justify-center shadow-xs transition-all shrink-0"
+            title="Unduh PNG Sketsa"
           >
             <IconifyIcon icon="solar:download-minimalistic-bold" className="w-4 h-4" />
-            <span>Unduh PNG</span>
           </button>
         </div>
       </div>
-
-      {/* Main Canvas Drawing Artboard */}
-      <div
-        ref={containerRef}
-        className="relative w-full rounded-3xl overflow-hidden border-2 border-slate-200/90 shadow-md bg-white select-none"
-        style={{ minHeight: "680px" }}
-      >
         {/* Background Visual Template Overlays */}
         {bgTemplate === "grid" && (
           <div
@@ -493,40 +644,8 @@ export function WhiteboardTool({
           onPointerMove={draw}
           onPointerUp={stopDrawing}
           onPointerCancel={stopDrawing}
-          className="relative z-10 w-full h-[680px] touch-none cursor-crosshair"
+          className="relative z-10 w-full h-full touch-none cursor-crosshair"
         />
-
-        {/* Floating Pitching Telemetry Bar (Bottom overlay) */}
-        <div className="absolute bottom-4 left-4 right-4 z-20 bg-white/90 backdrop-blur-md rounded-2xl p-3 border border-slate-200/90 shadow-lg flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
-              <IconifyIcon icon="solar:calculator-minimalistic-bold" className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-slate-400 block uppercase">
-                Estimasi Closing Unit ({clientName})
-              </span>
-              <span className="text-sm font-black text-slate-900 tabular-nums">
-                Harga: {formatRupiah(propertyPrice)} · Angsuran: {formatRupiah(monthlyInstallment)}/bln
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 hidden sm:inline">
-              Gunakan pena untuk tandai nomor kavling atau modifikasi denah.
-            </span>
-            <button
-              type="button"
-              onClick={onNavigateToSlip}
-              className="text-xs font-bold px-3 py-1.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 transition-colors flex items-center gap-1.5"
-            >
-              <span>Kirim ke Slip Penawaran</span>
-              <IconifyIcon icon="solar:arrow-right-linear" className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

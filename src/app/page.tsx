@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ToolMode, PropertyPreset, KprInputState, DbrInputState, BankRate } from "@/types";
 import { PROPERTY_PRESETS } from "@/data/propertyPresets";
 import { REAL_BANK_RATES } from "@/data/realBankRates";
 import { calculateKprSummary } from "@/lib/kprCalculations";
+import { cn } from "@/lib/utils";
 import { AppSidebar } from "@/components/sidebar/AppSidebar";
 import { CanvasHeader } from "@/components/header/CanvasHeader";
 import { BankRateSelectorModal } from "@/components/bank/BankRateSelectorModal";
@@ -15,6 +16,7 @@ import { JointIncomeDbrTool } from "@/components/tools/JointIncomeDbrTool";
 import { RentVsBuyTool } from "@/components/tools/RentVsBuyTool";
 import { CapitalGainTool } from "@/components/tools/CapitalGainTool";
 import { ProposalSlipDrawer } from "@/components/tools/ProposalSlipDrawer";
+import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 
 export default function Home() {
   const [activeTool, setActiveTool] = useState<ToolMode>("kpr");
@@ -61,6 +63,105 @@ export default function Home() {
     ],
     targetHousePrice: defaultPreset.price,
   });
+
+  // Hydration state for client localStorage sync
+  const [isHydrated, setIsHydrated] = useState<boolean>(false);
+
+  // Restore state from localStorage on client mount
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const savedTool = localStorage.getItem("tiar_active_tool_v1");
+        if (savedTool) setActiveTool(savedTool as ToolMode);
+
+        const savedName = localStorage.getItem("tiar_client_name_v1");
+        if (savedName) setClientName(savedName);
+
+        const savedPreset = localStorage.getItem("tiar_active_preset_id_v1");
+        if (savedPreset) setActivePresetId(savedPreset);
+
+        const savedBank = localStorage.getItem("tiar_selected_bank_id_v1");
+        if (savedBank) setSelectedBankId(savedBank);
+
+        const savedSidebar = localStorage.getItem("tiar_sidebar_collapsed_v1");
+        if (savedSidebar !== null) setIsSidebarCollapsed(savedSidebar === "true");
+
+        const savedKpr = localStorage.getItem("tiar_kpr_input_v1");
+        if (savedKpr) {
+          try {
+            const parsed = JSON.parse(savedKpr);
+            if (parsed && typeof parsed === "object") {
+              setKprInput((prev) => ({ ...prev, ...parsed }));
+            }
+          } catch {}
+        }
+
+        const savedDbr = localStorage.getItem("tiar_dbr_input_v1");
+        if (savedDbr) {
+          try {
+            const parsed = JSON.parse(savedDbr);
+            if (parsed && typeof parsed === "object") {
+              setDbrInput((prev) => ({ ...prev, ...parsed }));
+            }
+          } catch {}
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load from localStorage:", e);
+    } finally {
+      setIsHydrated(true);
+    }
+  }, []);
+
+  // Save changes to localStorage after hydration
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("tiar_active_tool_v1", activeTool);
+    } catch {}
+  }, [activeTool, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("tiar_client_name_v1", clientName);
+    } catch {}
+  }, [clientName, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("tiar_active_preset_id_v1", activePresetId);
+    } catch {}
+  }, [activePresetId, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("tiar_selected_bank_id_v1", selectedBankId);
+    } catch {}
+  }, [selectedBankId, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("tiar_sidebar_collapsed_v1", String(isSidebarCollapsed));
+    } catch {}
+  }, [isSidebarCollapsed, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("tiar_kpr_input_v1", JSON.stringify(kprInput));
+    } catch {}
+  }, [kprInput, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    try {
+      localStorage.setItem("tiar_dbr_input_v1", JSON.stringify(dbrInput));
+    } catch {}
+  }, [dbrInput, isHydrated]);
 
   // Real-time calculation output
   const kprResult = useMemo(() => {
@@ -134,7 +235,14 @@ export default function Home() {
         />
 
         {/* Dynamic Tool Content */}
-        <main className="flex-1 px-4 sm:px-8 py-6 max-w-7xl w-full mx-auto">
+        <main
+          className={cn(
+            "flex-1 w-full mx-auto",
+            activeTool === "whiteboard"
+              ? "p-2 sm:p-4 h-[calc(100vh-65px)] flex flex-col max-w-none"
+              : "px-4 sm:px-8 py-6 max-w-7xl"
+          )}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTool}
@@ -142,6 +250,7 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.16, ease: "easeOut" }}
+              className={cn("w-full", activeTool === "whiteboard" && "h-full flex flex-col flex-1")}
             >
               {activeTool === "kpr" && (
                 <KprCalculatorTool
@@ -196,32 +305,34 @@ export default function Home() {
           </AnimatePresence>
         </main>
 
-        {/* Minimal Studio-Grade Footer */}
-        <footer className="no-print bg-white border-t border-slate-200/90 py-5 px-4 sm:px-8 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-3 mt-auto">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-slate-900">TIAR PROPERTY</span>
-            <span>·</span>
-            <span>Partner Resmi PT. Trimitra Manunggal Jaya</span>
-          </div>
+        {/* Minimal Studio-Grade Footer (Hidden on Whiteboard Tool for 100% Full Canvas) */}
+        {activeTool !== "whiteboard" && (
+          <footer className="no-print bg-white border-t border-slate-200/90 py-4 px-4 sm:px-8 text-xs text-slate-500 flex flex-wrap items-center justify-between gap-3 mt-auto">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-slate-900">TIAR PROPERTY</span>
+              <span>·</span>
+              <span className="text-slate-600 font-medium">Surabaya & Sidoarjo</span>
+            </div>
 
-          <div className="flex items-center gap-4 text-emerald-700 font-bold">
-            <span>✓ DP 0% All-In</span>
-            <span>✓ Free Pajak & Notaris</span>
-            <span>✓ 5 Bank Rekanan BUMN</span>
-          </div>
+            <div className="flex items-center gap-4 text-emerald-700 font-bold">
+              <span>✓ DP 0% All-In</span>
+              <span>✓ Free Pajak & Notaris</span>
+              <span>✓ 5 Bank Rekanan BUMN</span>
+            </div>
 
-          <div>
-            <span>Hotline: </span>
-            <a
-              href="https://wa.me/6285196598881"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-700 font-extrabold hover:underline"
-            >
-              +62 851-9659-8881
-            </a>
-          </div>
-        </footer>
+            <div>
+              <span>Hotline: </span>
+              <a
+                href="https://wa.me/6285196598881"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-700 font-extrabold hover:underline"
+              >
+                +62 851-9659-8881
+              </a>
+            </div>
+          </footer>
+        )}
       </div>
 
       {/* Bank Rate Selector Modal */}
@@ -231,6 +342,9 @@ export default function Home() {
         onSelectBank={handleSelectBank}
         selectedBankId={selectedBankId}
       />
+
+      {/* PWA Mobile App Installation Prompt */}
+      <PwaInstallPrompt />
     </div>
   );
 }

@@ -5,8 +5,15 @@ export const metadata: Metadata = {
   title: "Tools Pitching & Kalkulator KPR — Tiar Property Surabaya & Sidoarjo",
   description:
     "Portal interaktif kalkulator KPR, simulasi subsidi developer, papan sketsa denah, dan verifikasi kelayakan joint income Tiar Property.",
+  manifest: "/manifest.json",
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Tiar Property",
   },
 };
 

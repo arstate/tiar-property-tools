@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  compress: true,
+  generateEtags: true,
+  trailingSlash: false,
+  poweredByHeader: false,
   reactStrictMode: true,
 };
 
