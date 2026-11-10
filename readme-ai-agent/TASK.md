@@ -32,6 +32,8 @@
 - [x] Fix CanvasHeader z-index layer bug (`z-40`) to prevent slider thumbs bleed-through on scroll
 - [x] Configure `vercel.json` with extreme bandwidth caching headers & HTTP security policies
 - [x] Update `next.config.ts` with `compress`, `generateEtags`, `trailingSlash: false`, and `poweredByHeader: false`
+- [x] Service Worker PWA upgrade (`tiar-tools-bandwidth-v2`) with `ignoreSearch: true` for ad traffic
+- [x] Generate multi-size `favicon.ico` to eliminate 404 origin bandwidth leak
 - [x] Production build validation (`npm run build`) with static export (`out/`)
 - [x] Push to GitHub repository `arstate/tiar-property-tools`
 - [x] Deploy to Vercel production with zero-usage configuration
